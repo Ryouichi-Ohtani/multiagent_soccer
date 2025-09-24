@@ -1,0 +1,41 @@
+# Quick Fix for DQNAgent 'training' error
+# Run this cell if you encounter: NameError: name 'training' is not defined
+
+# Fixed learn method for DQNAgent
+def fixed_learn(self, experiences=None, training=True):
+    """Learn from experiences - FIXED VERSION"""
+    if len(self.replay_buffer) < self.batch_size:
+        return {"loss": 0.0}
+    
+    batch = random.sample(self.replay_buffer, self.batch_size)
+    states, actions, rewards, next_states, dones = zip(*batch)
+    
+    states = torch.FloatTensor(states).to(self.device)
+    actions = torch.LongTensor(actions).to(self.device)
+    rewards = torch.FloatTensor(rewards).to(self.device)
+    next_states = torch.FloatTensor(next_states).to(self.device)
+    dones = torch.BoolTensor(dones).to(self.device)
+    
+    current_q_values = self.q_network(states).gather(1, actions.unsqueeze(1))
+    
+    with torch.no_grad():
+        next_q_values = self.target_network(next_states).max(1)[0]
+        target_q_values = rewards + (self.gamma * next_q_values * ~dones)
+    
+    loss = nn.MSELoss()(current_q_values.squeeze(), target_q_values)
+    
+    self.optimizer.zero_grad()
+    loss.backward()
+    torch.nn.utils.clip_grad_norm_(self.q_network.parameters(), max_norm=1.0)
+    self.optimizer.step()
+    
+    if training:  # Fixed: now training is a parameter
+        self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
+    
+    return {"loss": loss.item(), "epsilon": self.epsilon}
+
+# Apply the fix to DQNAgent class
+DQNAgent.learn = fixed_learn
+
+print("✅ DQNAgent.learn method has been fixed!")
+print("   You can now run the DQN training without errors.")
